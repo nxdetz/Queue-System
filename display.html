@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>จอแสดงคิว</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css"></head><body>
+<div class="board">
+  <div class="bigcall"><div class="lb">ขอเชิญหมายเลข</div><div class="code" id="c">–</div><div class="lb" id="s">รอการเรียกคิว</div>
+    <button class="btn ghost" id="snd" style="margin-top:28px">🔔 เปิดเสียงประกาศ</button></div>
+  <div><h2 style="margin-bottom:12px">เคาน์เตอร์</h2><div id="cn"></div><h2 style="margin:18px 0 12px">คิวที่รออยู่</h2><div id="w"></div></div>
+</div>
+<script>
+let on=false,seen=0;
+document.getElementById('snd').onclick=e=>{on=true;e.target.classList.add('hide');speechSynthesis.speak(new SpeechSynthesisUtterance(''))};
+function say(t){if(!on)return;const u=new SpeechSynthesisUtterance(`ขอเชิญหมายเลข ${t.code.split('').join(' ')} ที่เคาน์เตอร์ ${t.counter} ค่ะ`);u.lang='th-TH';speechSynthesis.speak(u)}
+async function load(){
+  const S=await fetch('/api/state').then(r=>r.json());
+  const sv=id=>S.services.find(s=>s.id===id)||{},r=S.recent[0];
+  c.textContent=r?r.code:'–';s.textContent=r?`เคาน์เตอร์ ${r.counter}`:'รอการเรียกคิว';
+  if(r&&r.calledAt>seen){if(seen)say(r);seen=r.calledAt}
+  cn.innerHTML=S.counters.map(n=>{const t=S.serving.find(x=>x.counter===n);return `<div class="cn"><span>เคาน์เตอร์ ${n}</span><b style="${t?'':'color:var(--muted)'}">${t?t.code:'ว่าง'}</b></div>`}).join('');
+  w.innerHTML=S.services.map(x=>`<div class="cn"><span>${x.icon} ${x.name}</span><b>${S.waiting[x.id]}</b></div>`).join('');
+}
+load();setInterval(load,2500);
+</script></body></html>
