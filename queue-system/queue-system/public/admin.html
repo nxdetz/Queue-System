@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="th"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>พนักงาน · ระบบคิว</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head><body><main>
+<h1>แผงควบคุมพนักงาน</h1>
+
+<div class="card" id="login">
+  <input id="pin" type="password" inputmode="numeric" placeholder="รหัส PIN">
+  <button id="loginBtn">เข้าสู่ระบบ</button>
+  <div class="msg" id="err"></div>
+</div>
+
+<div id="panel" class="hide" style="display:flex;flex-direction:column;gap:16px">
+  <div class="card">
+    <div class="label">กำลังเรียกคิว</div>
+    <div class="big" id="serving">–</div>
+    <div class="msg" id="who"></div>
+  </div>
+  <button id="next">เรียกคิวถัดไป</button>
+  <div class="row">
+    <button class="ghost" id="skip">ข้ามคิว</button>
+    <button class="ghost" id="reset">รีเซ็ตทั้งหมด</button>
+  </div>
+  <div class="card list" id="list"></div>
+</div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let pin=sessionStorage.getItem('pin')||'';
+const call=(u,m='GET')=>fetch(u,{method:m,headers:{'x-pin':pin}}).then(r=>{if(r.status===401)throw 0;return r.json()});
+
+async function load(){
+  try{
+    const d=await call('/api/admin/list');
+    $('login').classList.add('hide');$('panel').classList.remove('hide');
+    $('serving').textContent=d.current?.n??'–';
+    $('who').textContent=d.current?.name||'';
+    $('list').innerHTML=d.queue.length
+      ?d.queue.map(t=>`<div class="item"><b>${t.n}</b><span>${(t.name||'').replace(/[<>&]/g,'')||'—'}</span></div>`).join('')
+      :'<div class="msg" style="text-align:center">ไม่มีคิวที่รออยู่</div>';
+  }catch{sessionStorage.removeItem('pin');$('login').classList.remove('hide');$('panel').classList.add('hide')}
+}
+$('loginBtn').onclick=async()=>{
+  pin=$('pin').value;
+  try{await call('/api/admin/list');sessionStorage.setItem('pin',pin);load()}
+  catch{$('err').textContent='รหัสไม่ถูกต้อง'}
+};
+$('next').onclick=()=>call('/api/admin/next','POST').then(load);
+$('skip').onclick=()=>confirm('ข้ามคิวปัจจุบัน?')&&call('/api/admin/skip','POST').then(load);
+$('reset').onclick=()=>confirm('รีเซ็ตคิวทั้งหมดเป็น 0?')&&call('/api/admin/reset','POST').then(load);
+if(pin)load();setInterval(()=>pin&&load(),3000);
+</script></body></html>
