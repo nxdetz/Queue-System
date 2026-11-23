@@ -1,0 +1,26 @@
+<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ติดตามคิว</title><link rel="stylesheet" href="app.css">
+<style>
+body{display:grid;place-items:center;padding:20px}
+.t{width:min(420px,100%);text-align:center;border-top:12px solid var(--c,var(--pri))}
+.t h3{font-weight:500;color:var(--mute)}
+.no{font-size:96px;font-weight:700;color:var(--c,var(--pri));line-height:1.1}
+#msg{font-size:24px;font-weight:600;margin:12px 0 6px}#sub{color:var(--mute);font-size:17px}
+.t.call{animation:b 1s infinite alternate;background:#fff7e0}@keyframes b{to{background:#ffe9a8}}
+</style></head><body>
+<div class="card t" id="t"><h3 id="s"></h3><div class="no" id="no">…</div><div id="msg"></div><div id="sub"></div></div>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const $=s=>document.querySelector(s),id=new URLSearchParams(location.search).get('id');let was='';
+async function load(){
+  const r=await fetch('/api/tickets/'+id);
+  if(!r.ok){$('#no').textContent='—';$('#msg').textContent='ไม่พบบัตรคิว';$('#sub').textContent='บัตรอาจหมดอายุแล้ว กรุณากดบัตรคิวใหม่';return}
+  const t=await r.json(),el=$('#t');
+  el.style.setProperty('--c',t.color);$('#s').textContent=t.serviceName;$('#no').textContent=t.number;el.classList.toggle('call',t.status==='calling');
+  const m={waiting:[`อีก ${t.ahead} คิวจะถึงคุณ`,`รอประมาณ ${t.eta} นาที — หน้านี้อัปเดตอัตโนมัติ`],
+    calling:['ถึงคิวของคุณแล้ว!',`เชิญที่ ${t.counterName}`],done:['เสร็จสิ้นการให้บริการ','ขอบคุณที่ใช้บริการ'],skipped:['คิวถูกข้ามแล้ว','กรุณากดบัตรคิวใหม่ที่ตู้']}[t.status];
+  $('#msg').textContent=m[0];$('#sub').textContent=m[1];document.title=`${t.number} · ${m[0]}`;
+  if(t.status==='calling'&&was!=='calling'&&navigator.vibrate)navigator.vibrate([300,150,300,150,300]);was=t.status;
+}
+load();io().on('state',load);
+</script></body></html>

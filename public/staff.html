@@ -1,0 +1,84 @@
+<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>เจ้าหน้าที่ · ระบบคิว</title><link rel="stylesheet" href="app.css">
+<style>
+.wrap{max-width:1100px;margin:auto;padding:20px}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.tabs{display:flex;gap:8px;margin:16px 0}
+.tab{padding:10px 20px;border-radius:99px;border:0;background:#fff;cursor:pointer;font-weight:500}.tab.on{background:var(--ink);color:#fff}
+.cols{display:grid;grid-template-columns:1.2fr 1fr;gap:20px}@media(max-width:800px){.cols{grid-template-columns:1fr}}
+.cur{text-align:center;border-top:10px solid var(--c,var(--line))}
+.cur .big{font-size:104px;font-weight:700;line-height:1.1;color:var(--c,var(--mute))}
+.cur .acts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.chip{padding:8px 14px;border-radius:12px;background:#eef3f3;font-weight:600;border-left:6px solid var(--c)}
+h3{margin-bottom:6px}.mute{color:var(--mute)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}
+.stat b{font-size:40px;display:block}
+.row{display:flex;gap:8px;margin:8px 0;align-items:center}.row .sm{width:70px;flex:none;text-align:center;font-weight:700}
+.form{display:grid;gap:12px}.form label{display:grid;gap:4px;font-weight:500}
+.chk{display:flex!important;grid-auto-flow:column;align-items:center;gap:6px;font-weight:400!important}
+.stack{display:grid;gap:16px}
+#login{max-width:340px;margin:12vh auto;text-align:center}#login input{text-align:center;font-size:28px;letter-spacing:8px;margin:16px 0}
+#err{color:var(--bad);min-height:24px}
+</style></head><body>
+<div class="card" id="login"><h2>เข้าสู่ระบบเจ้าหน้าที่</h2><input id="pin" type="password" inputmode="numeric" placeholder="PIN" onkeydown="event.key==='Enter'&&login()"><div id="err"></div><button class="btn lg" onclick="login()">เข้าสู่ระบบ</button></div>
+<div class="wrap" id="app" hidden>
+  <div class="bar"><h2 id="org"></h2><div class="bar"><a class="btn ghost" href="/" target="_blank">ตู้กดบัตร</a><a class="btn ghost" href="/display.html" target="_blank">จอแสดงคิว</a><button class="btn ghost" onclick="logout()">ออกจากระบบ</button></div></div>
+  <div class="tabs"><button class="tab on" data-t="ctl">เรียกคิว</button><button class="tab" data-t="stats">สถิติวันนี้</button><button class="tab" data-t="cfg">ตั้งค่า</button></div>
+  <div id="ctl"><div class="cols">
+    <div class="card cur" id="cur"></div>
+    <div class="card"><h3>ช่องบริการของฉัน</h3><select id="csel" onchange="myc=+this.value;localStorage.counter=myc;render(st)"></select>
+      <div style="margin:12px 0"><button class="btn ghost" id="tog" onclick="act('toggle')"></button></div>
+      <h3>คิวที่รออยู่ <span class="mute" id="wn"></span></h3><div class="chips" id="wl"></div></div>
+  </div></div>
+  <div id="stats" hidden></div>
+  <div id="cfg" class="stack" hidden></div>
+</div>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const $=s=>document.querySelector(s);let pin=sessionStorage.pin,st,cfg,myc=+localStorage.counter||0,sock;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function api(p,m='GET',b){const r=await fetch(p,{method:m,headers:{'Content-Type':'application/json','x-pin':pin||''},body:b?JSON.stringify(b):undefined});if(r.status===401){logout();throw 0}const j=await r.json();if(!r.ok){alert(j.error||'เกิดข้อผิดพลาด');throw 0}return j}
+async function login(){pin=$('#pin').value;const r=await fetch('/api/auth',{method:'POST',headers:{'x-pin':pin}});if(r.ok){sessionStorage.pin=pin;start()}else $('#err').textContent='PIN ไม่ถูกต้อง'}
+function logout(){sessionStorage.removeItem('pin');location.reload()}
+function start(){$('#login').hidden=true;$('#app').hidden=false;sock=io();sock.on('state',s=>{st=s;render(s)});sock.on('call',()=>{});setInterval(()=>!$('#stats').hidden&&loadStats(),10000)}
+if(pin)fetch('/api/auth',{method:'POST',headers:{'x-pin':pin}}).then(r=>r.ok?start():0);
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));['ctl','stats','cfg'].forEach(k=>$('#'+k).hidden=k!==b.dataset.t);if(b.dataset.t==='stats')loadStats();if(b.dataset.t==='cfg')openCfg()});
+const act=a=>api(`/api/counters/${myc}/${a}`,'POST');
+
+function render(s){
+  $('#org').textContent=s.settings.org+' · จัดการคิว';
+  if(!s.counters.find(c=>c.id===myc))myc=s.counters[0].id;
+  $('#csel').innerHTML=s.counters.map(c=>`<option value="${c.id}" ${c.id===myc?'selected':''}>${esc(c.name)}</option>`).join('');
+  const c=s.counters.find(c=>c.id===myc),t=c.ticket,mine=s.waiting.filter(w=>c.services.includes(w.service));
+  const cur=$('#cur');cur.style.setProperty('--c',t?t.color:'');
+  cur.innerHTML=t?`<div class="mute">กำลังเรียก · ${esc(t.serviceName)}${t.calls>1?` · เรียกแล้ว ${t.calls} ครั้ง`:''}</div><div class="big">${t.number}</div>
+    <div class="acts"><button class="btn warn" onclick="act('recall')">เรียกซ้ำ</button><button class="btn bad" onclick="act('skip')">ข้ามคิว</button><button class="btn" onclick="act('done')">เสร็จสิ้น</button></div>`
+   :`<div class="mute">${c.open?'ช่องว่าง':'ช่องนี้ปิดอยู่'}</div><div class="big">—</div><div class="acts" style="grid-template-columns:1fr"><button class="btn lg" ${(!c.open||!mine.length)?'disabled':''} onclick="act('next')">เรียกคิวถัดไป</button></div>${s.settings.auto?'<p class="mute" style="margin-top:12px">โหมดอัตโนมัติเปิดอยู่ — ระบบจะเรียกคิวให้เองเมื่อช่องว่าง</p>':''}`;
+  $('#tog').textContent=c.open?'ปิดช่องบริการ (พักเบรก)':'เปิดช่องบริการ';
+  $('#wn').textContent=`(${mine.length})`;
+  const col=id=>(s.services.find(v=>v.id===id)||{}).color;
+  $('#wl').innerHTML=mine.slice(0,40).map(w=>`<span class="chip" style="--c:${col(w.service)}">${w.number}</span>`).join('')||'<span class="mute">ไม่มีคิวรอ</span>';
+}
+
+async function loadStats(){
+  const d=await api('/api/stats');
+  $('#stats').innerHTML=`<div class="stats">${[['ออกบัตรทั้งหมด',d.total],['กำลังรอ',d.waiting],['ให้บริการแล้ว',d.served],['ข้ามคิว',d.skipped],['รอเฉลี่ย (นาที)',d.avgWaitMin],['บริการเฉลี่ย (นาที)',d.avgServiceMin]].map(x=>`<div class="card stat"><span class="mute">${x[0]}</span><b>${x[1]}</b></div>`).join('')}</div>
+  <div class="card" style="margin-top:16px"><h3>แยกตามบริการ</h3>${d.perService.map(s=>`<div class="row"><span class="chip" style="--c:${s.color}">${s.id}</span><span style="flex:1">${esc(s.name)}</span><span>${s.served}/${s.total} คิว</span></div>`).join('')}</div>
+  ${d.history.length?`<div class="card" style="margin-top:16px"><h3>ย้อนหลัง</h3>${d.history.map(h=>`<div class="row"><span style="flex:1">${h.date}</span><span>${h.served}/${h.total} คิว</span></div>`).join('')}</div>`:''}`;
+}
+
+function openCfg(){cfg=JSON.parse(JSON.stringify({settings:st.settings,services:st.services.map(({id,name,color})=>({id,name,color})),counters:st.counters.map(({id,name,services,open})=>({id,name,services,open}))}));drawCfg()}
+function tog(i,id,on){const l=cfg.counters[i].services;const k=l.indexOf(id);if(on&&k<0)l.push(id);if(!on&&k>=0)l.splice(k,1)}
+function drawCfg(){const c=cfg;$('#cfg').innerHTML=`
+ <div class="card"><h3>ทั่วไป</h3><div class="form">
+  <label>ชื่อหน่วยงาน<input value="${esc(c.settings.org)}" oninput="cfg.settings.org=this.value"></label>
+  <label>เวลาบริการเฉลี่ยเริ่มต้น (นาที) — ระบบจะคำนวณจริงเองเมื่อมีข้อมูล<input type="number" min="1" value="${c.settings.avgMin}" oninput="cfg.settings.avgMin=+this.value"></label>
+  <label>ข้ามคิวอัตโนมัติถ้าผู้รับบริการไม่มาภายใน (วินาที, 0 = ไม่ข้าม)<input type="number" min="0" value="${c.settings.noShowSec}" oninput="cfg.settings.noShowSec=+this.value"></label>
+  <label class="chk"><input type="checkbox" ${c.settings.auto?'checked':''} onchange="cfg.settings.auto=this.checked"> เรียกคิวถัดไปอัตโนมัติเมื่อช่องว่าง</label></div></div>
+ <div class="card"><h3>ประเภทบริการ</h3>${c.services.map((s,i)=>`<div class="row"><input class="sm" maxlength="2" value="${esc(s.id)}" oninput="cfg.services[${i}].id=this.value.toUpperCase()" aria-label="ตัวอักษรนำหน้า"><input value="${esc(s.name)}" oninput="cfg.services[${i}].name=this.value" aria-label="ชื่อบริการ"><input type="color" value="${s.color}" oninput="cfg.services[${i}].color=this.value"><button class="btn ghost" onclick="cfg.services.splice(${i},1);drawCfg()">ลบ</button></div>`).join('')}<button class="btn ghost" onclick="cfg.services.push({id:'',name:'',color:'#3b6fd4'});drawCfg()">เพิ่มบริการ</button></div>
+ <div class="card"><h3>ช่องบริการ</h3>${c.counters.map((k,i)=>`<div class="row" style="flex-wrap:wrap"><input style="flex:1;min-width:140px" value="${esc(k.name)}" oninput="cfg.counters[${i}].name=this.value" aria-label="ชื่อช่อง">${c.services.filter(s=>s.id).map(s=>`<label class="chk"><input type="checkbox" ${k.services.includes(s.id)?'checked':''} onchange="tog(${i},'${s.id}',this.checked)">${s.id}</label>`).join('')}<button class="btn ghost" onclick="cfg.counters.splice(${i},1);drawCfg()">ลบ</button></div>`).join('')}<button class="btn ghost" onclick="cfg.counters.push({id:0,name:'ช่อง ${c.counters.length+1}',services:cfg.services.map(s=>s.id),open:true});drawCfg()">เพิ่มช่อง</button></div>
+ <div class="bar"><button class="btn lg" onclick="saveCfg()">บันทึกการตั้งค่า</button><button class="btn bad" onclick="resetDay()">ล้างคิวทั้งหมดวันนี้</button></div>`}
+async function saveCfg(){await api('/api/config','PUT',cfg);alert('บันทึกแล้ว')}
+async function resetDay(){if(confirm('ล้างคิวและเริ่มนับเลขใหม่ทั้งหมด?')){await api('/api/reset','POST');alert('ล้างคิวแล้ว')}}
+</script></body></html>
