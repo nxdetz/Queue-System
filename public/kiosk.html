@@ -1,0 +1,58 @@
+<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>กดบัตรคิว</title><link rel="stylesheet" href="app.css">
+<style>
+header{background:var(--ink);color:#fff;padding:28px 40px;display:flex;justify-content:space-between;align-items:center}
+header h1{font-size:30px;font-weight:600}header p{opacity:.7;margin-top:4px}
+#clock{font-size:40px;font-weight:600}
+main{max-width:1100px;margin:0 auto;padding:36px 24px}
+main>h2{font-size:26px;margin-bottom:22px}
+#grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:22px}
+.svc{background:#fff;border:0;border-radius:22px;padding:30px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:8px;box-shadow:0 1px 2px #12263a0d,0 10px 28px #12263a12;border-left:12px solid var(--c);transition:transform .12s}
+.svc:active{transform:scale(.97)}
+.svc b{font-size:64px;line-height:1;color:var(--c)}
+.svc span{font-size:26px;font-weight:600}.svc small{color:var(--mute);font-size:16px}
+.ticket{background:#fff;border-radius:28px;padding:32px;text-align:center;width:min(400px,100%)}
+.ticket h3{font-weight:500;color:var(--mute)}
+.ticket .no{font-size:104px;font-weight:700;line-height:1.1;color:var(--c)}
+.ticket .meta{margin:8px 0 16px;font-size:18px}.ticket .meta b{font-size:22px}
+#qr{display:flex;justify-content:center;margin:12px 0}
+.ticket small{color:var(--mute);display:block}
+.acts{display:flex;gap:10px;justify-content:center;margin-top:18px}
+footer{text-align:center;padding:20px;color:var(--mute);font-size:14px}footer a{color:var(--mute);margin:0 8px}
+@media print{body *{visibility:hidden}.ticket,.ticket *{visibility:visible}.ticket{position:absolute;left:0;top:0;width:80mm;box-shadow:none;padding:8px}.acts{display:none}}
+</style></head><body>
+<header><div><h1 id="org">ระบบคิว</h1><p>แตะประเภทบริการเพื่อรับบัตรคิว</p></div><div id="clock"></div></header>
+<main><h2>เลือกบริการที่ต้องการ</h2><div id="grid"></div></main>
+<footer><a href="/">เมนูหลัก</a><a href="/display.html">จอแสดงคิว</a><a href="/staff.html">เจ้าหน้าที่</a></footer>
+<div class="modal" id="modal" hidden><div class="ticket" id="tk">
+  <h3 id="tOrg"></h3><div class="no" id="tNo"></div>
+  <div class="meta"><div id="tSvc"></div><div>รอก่อนหน้า <b id="tAhead"></b> คิว · ประมาณ <b id="tEta"></b> นาที</div></div>
+  <div id="qr"></div><small>สแกนเพื่อติดตามคิวบนมือถือ</small><small id="tTime"></small>
+  <div class="acts"><button class="btn ghost" onclick="window.print()">พิมพ์บัตรคิว</button><button class="btn" onclick="closeM()">เสร็จ</button></div>
+</div></div>
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+const $=s=>document.querySelector(s);let busy=false,tm;
+const socket=io();socket.on('state',render);
+fetch('/api/state').then(r=>r.json()).then(render);
+setInterval(()=>$('#clock').textContent=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}),1000);
+function render(s){
+  $('#org').textContent=s.settings.org;document.title='กดบัตรคิว · '+s.settings.org;
+  $('#grid').innerHTML=s.services.map(v=>`<button class="svc" style="--c:${v.color}" onclick="take('${v.id}')"><b>${v.id}</b><span>${v.name}</span><small>มีคิวรอ ${v.waiting} คิว</small></button>`).join('');
+}
+async function take(id){
+  if(busy)return;busy=true;
+  try{
+    const t=await (await fetch('/api/tickets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({service:id})})).json();
+    $('#tk').style.setProperty('--c',t.color);$('#tOrg').textContent=document.title.split(' · ')[1]||'';
+    $('#tNo').textContent=t.number;$('#tSvc').textContent=t.serviceName;
+    $('#tAhead').textContent=t.ahead;$('#tEta').textContent=t.eta;
+    $('#tTime').textContent=new Date(t.createdAt).toLocaleString('th-TH');
+    $('#qr').innerHTML='';new QRCode($('#qr'),{text:location.origin+'/track.html?id='+t.id,width:132,height:132});
+    $('#modal').hidden=false;clearTimeout(tm);tm=setTimeout(closeM,30000);
+  }catch(e){alert('ไม่สามารถออกบัตรคิวได้ กรุณาลองใหม่')}
+  setTimeout(()=>busy=false,600);
+}
+function closeM(){$('#modal').hidden=true;clearTimeout(tm)}
+</script></body></html>

@@ -128,9 +128,11 @@ app.post('/api/counters/:id/:action', auth, (req, res) => {
       t.calls++; t.calledAt = Date.now();
       io.emit('call', { id: t.id, number: t.number, counter: c.name }); break;
     }
-    case 'done': case 'skip':
+    case 'done': case 'skip': case 'donenext':
       if (need()) return;
-      finish(c, req.params.action === 'done' ? 'done' : 'skipped'); break;
+      finish(c, req.params.action === 'skip' ? 'skipped' : 'done');
+      if (req.params.action === 'donenext') callNext(c);
+      break;
     case 'toggle':
       c.open = !c.open; if (c.open && S.settings.auto) callNext(c); break;
     default: return res.status(400).json({ error: 'คำสั่งไม่ถูกต้อง' });

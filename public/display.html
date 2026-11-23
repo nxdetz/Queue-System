@@ -17,10 +17,9 @@ main{flex:1;display:grid;grid-template-columns:1.25fr 1fr;gap:24px;padding:0 40p
 footer{display:flex;gap:16px;padding:0 40px 24px;flex-wrap:wrap}
 .w{flex:1;min-width:200px;background:#13293d;border-radius:18px;padding:14px 20px;border-top:6px solid var(--c)}
 .w b{font-size:20px}.w div{font-size:26px;margin-top:4px;opacity:.9}
-#unlock{position:fixed;inset:0;background:#0c1b29ee;display:grid;place-items:center;z-index:5}
-#unlock button{font-size:28px;padding:24px 40px}
+#unlock{position:fixed;right:24px;bottom:24px;z-index:5;padding:14px 22px;font-size:18px;box-shadow:0 8px 24px #0008}
 </style></head><body>
-<div id="unlock"><button class="btn lg" onclick="enable()">แตะเพื่อเปิดเสียงเรียกคิว</button></div>
+<button class="btn" id="unlock" onclick="enable(true)">🔊 เปิดเสียง + เต็มจอ</button>
 <header><div id="org"></div><div id="clock"></div></header>
 <main><section class="now" id="now"><small>ขอเชิญหมายเลข</small><div id="no">—</div><div id="at">รอการเรียกคิว</div></section><section class="cs" id="cs"></section></main>
 <footer id="ft"></footer>
@@ -30,7 +29,8 @@ const $=s=>document.querySelector(s);let audio=false,ac,st;
 const socket=io();socket.on('state',render);
 socket.on('call',e=>{const n=$('#now');n.classList.remove('pulse');void n.offsetWidth;n.classList.add('pulse');if(audio)say(e.number,e.counter)});
 setInterval(()=>$('#clock').textContent=new Date().toLocaleTimeString('th-TH'),1000);
-function enable(){audio=true;$('#unlock').hidden=true;ac=new(window.AudioContext||window.webkitAudioContext)();speechSynthesis&&speechSynthesis.speak(new SpeechSynthesisUtterance(''))}
+function enable(full){if(audio)return;audio=true;$('#unlock').hidden=true;if(full&&document.documentElement.requestFullscreen)document.documentElement.requestFullscreen().catch(()=>{});ac=new(window.AudioContext||window.webkitAudioContext)();if('speechSynthesis' in window){const u=new SpeechSynthesisUtterance('เปิดเสียงเรียกคิวแล้ว');u.lang='th-TH';speechSynthesis.speak(u)}}
+['pointerdown','keydown'].forEach(e=>addEventListener(e,()=>enable(false),{once:true}));
 function chime(){if(!ac)return;[660,880].forEach((f,i)=>{const o=ac.createOscillator(),g=ac.createGain(),t=ac.currentTime+i*.25;o.frequency.value=f;o.connect(g);g.connect(ac.destination);g.gain.setValueAtTime(.3,t);g.gain.exponentialRampToValueAtTime(.001,t+.5);o.start(t);o.stop(t+.5)})}
 function say(n,c){chime();if(!('speechSynthesis' in window))return;
   const u=new SpeechSynthesisUtterance(`ขอเชิญหมายเลข ${n[0]} ${n.slice(1).split('').join(' ')} ที่ ${c} ค่ะ`);u.lang='th-TH';u.rate=.9;setTimeout(()=>speechSynthesis.speak(u),700)}
